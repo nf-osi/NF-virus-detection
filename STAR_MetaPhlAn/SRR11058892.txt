@@ -1,0 +1,11 @@
+#mpa_v30_CHOCOPhlAn_201901
+#/home/ssm-user/miniconda3/bin/metaphlan /home/ssm-user/STAR_MetaPhlAn/analysis/star_results/SRR11058892_Unmapped.out.mate1,/home/ssm-user/STAR_MetaPhlAn/analysis/star_results/SRR11058892_Unmapped.out.mate2 --bowtie2out metagenome.bowtie2.bz2 --add_viruses --ignore_eukaryotes --nproc 16 --input_type fastq --read_min_len 30
+#SampleID	Metaphlan_Analysis
+#clade_name	NCBI_tax_id	relative_abundance	additional_species
+k__Viruses	10239	100.0	
+k__Viruses|p__Viruses_unclassified	10239|	100.0	
+k__Viruses|p__Viruses_unclassified|c__Viruses_unclassified	10239||	100.0	
+k__Viruses|p__Viruses_unclassified|c__Viruses_unclassified|o__Ortervirales	10239|||2169561	100.0	
+k__Viruses|p__Viruses_unclassified|c__Viruses_unclassified|o__Ortervirales|f__Retroviridae	10239|||2169561|11632	100.0	
+k__Viruses|p__Viruses_unclassified|c__Viruses_unclassified|o__Ortervirales|f__Retroviridae|g__Gammaretrovirus	10239|||2169561|11632|153135	100.0	
+k__Viruses|p__Viruses_unclassified|c__Viruses_unclassified|o__Ortervirales|f__Retroviridae|g__Gammaretrovirus|s__Abelson_murine_leukemia_virus	10239|||2169561|11632|153135|11788	100.0	
