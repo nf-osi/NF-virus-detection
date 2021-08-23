@@ -1,1 +1,3 @@
-dummy
+This directory must contain the data files. Test data can be obtained from https://www.synapse.org/#!Synapse:syn26124751
+These files are obtained from SRA project https://www.ncbi.nlm.nih.gov/bioproject/PRJNA605826
+https://trace.ncbi.nlm.nih.gov/Traces/sra/?run=SRR11058892
