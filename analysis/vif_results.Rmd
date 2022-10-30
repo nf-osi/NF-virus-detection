@@ -1,0 +1,315 @@
+---
+title: "Viruses detected in cNF and related samples with CTAT-VIF"
+author: Robert Allaway, Parnal Joshi
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    fig_width: 7
+    fig_height: 6
+    fig_caption: true
+    df_print: paged 
+    #code_folding: true 
+---
+
+# Intro
+
+To compare the integrated "virome" of cNF tumors to similar samples, we performed virus detection on RNA-seq data from 33 cNF tumors from 11 patients, 14 cNF cell lines (7 immortalized and primary cell pairs), 3 immortalized plexiform neurofibroma cell lines, and 4 publicly-available control nerve samples. 
+
+After running CTAT-VIF v1.4.0 on these data, we stored the output files on Synapse. We also determined the total number of reads in each RNA-seq sample and stored this information on Synapse to allow us to normalize the number of viral reads detected by the total number of reads in each sample (counts per million). 
+
+
+# Load packages and prepare data
+
+This loads packages necessary for the analysis and also the data. 
+
+```{r message=FALSE, warning=FALSE}
+library(synapser)
+synLogin()
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggstatsplot)
+library(PMCMRplus)
+library(rstantools)
+
+## read depth/total reads for each file
+read_counts <- synGet('syn42475967')$path %>% 
+  read_csv(col_types = cols()) %>% 
+  mutate(label = case_when(grepl("pNF",specimenID) ~ "pNF Cell Line",
+                           grepl("cNF", specimenID) ~ "cNF Cell Line",
+                           grepl("patient", specimenID) ~ "cNF Tumor",
+                           grepl("SRR", specimenID) ~ "Control Nerve"))
+
+## cnf tumor vif results
+cnf_tum <- synTableQuery("SELECT * FROM syn41874685.2")$asDataFrame()
+
+## cnf and pnf cell line vif results
+cnf_cell <- synTableQuery("SELECT * from syn41866295.2")$asDataFrame()
+
+## normal nerve vif results
+norm_nerve <- synTableQuery("SELECT * from syn42124117.2")$asDataFrame()
+
+cnf_tum <- mutate(cnf_tum, label = "cNF Tumor")
+cnf_cell <- mutate(cnf_cell, label = case_when(grepl("pNF",specimenID) ~ "pNF Cell Line",
+                                               grepl("cNF", specimenID) ~ "cNF Cell Line"))
+norm_nerve <- mutate(norm_nerve, label = "Control Nerve")
+
+all_meta <- bind_rows(cnf_tum, cnf_cell, norm_nerve)
+
+all_dat_ls <- apply(all_meta, 1, function(x){
+  read_tsv(synGet(x['id'])$path, col_types = cols()) %>% 
+    mutate(specimenID = x['specimenID'])
+}) 
+
+all_dat <- all_dat_ls %>% 
+  bind_rows() %>% 
+  left_join(all_meta) %>% 
+  left_join(read_counts) %>% 
+  mutate(cpm = mapped/Reads*1e6) #calculated CPM for viral reads
+
+
+```
+
+# Results
+
+## Normalization
+
+First, let's explore the data at a high level. 
+
+Unsurprisingly, the number of mapped reads and the fraction of the viral genome that was detected is correlated, though there are some notable exceptions with very high reads mapped but very low mapped fraction. 
+
+Interestingly, the cNF tumors seem to have more complete mapping of the viral sequences, but we'll see in a moment that this is due to one virus that is detected in the cNF samples. 
+
+```{r message=FALSE, warning=FALSE}
+
+ggplot(all_dat, aes(x=mapped, y=frac_covered)) + 
+   ylab("Fraction of viral sequence mapped") + xlab("Reads mapped per tumor") + 
+  theme_bw() +
+  geom_point(aes(color = label))
+
+ggsave(filename = "../figures/FractionOfVirusMapped_vs_ReadsMapped.pdf", width = 5, height = 5)
+
+```
+
+How consistent are the total number of reads in each sample? This could affect the number of counts detected for each virus and make it more difficult to reasonably compare between datasets. 
+
+
+It turns out that the different datasets had pretty different read depths. We should probably normalize for this by calculating counts per million (cpm).
+
+```{r message=FALSE, warning=FALSE}
+
+ggplot(read_counts, aes(x=label, y=Reads, color = label)) + 
+  xlab("Specimen type") + ylab("Reads mapped per specimen") + 
+  geom_boxplot() +
+  theme_bw()
+
+ggsave(filename = "../figures/ReadsMappedPerSpecimen.pdf", width = 7, height = 5)
+
+```
+
+When we instead plot cpm vs the fraction of the virus map, we see a pretty similar plot, suggesting that the impact of this normalization is not huge, but it's still probably a more valid comparison between the different datasets. If anything, it increases the difference between the cNF tumors and the other samples.
+
+```{r message=FALSE, warning=FALSE}
+
+ggplot(all_dat, aes(x=cpm, y=frac_covered, color = label)) + 
+  ylab("Fraction of viral sequence mapped") + xlab("Reads mapped per tumor (cpm)") +
+  theme_bw() +
+  geom_point()
+
+ggsave(filename = "../figures/FractionOfVirusMapped_vs_CPM.pdf", width = 5, height = 5)
+
+
+```
+
+## Filtering
+
+We probably want to do one more step: filtering out the data where there were very few reads (likely spurious) or a very low mapping fraction. Based on the previous plot, we can probably just filter on the fraction of viral sequences mapped, because this is closely associated with reads mapped, particularly close to 0. 
+
+```{r message=FALSE, warning=FALSE}
+
+ggplot(all_dat, aes(x=frac_covered)) + 
+  xlab("Fraction of viral sequence mapped") +
+  theme_bw() +
+  geom_histogram(binwidth = 0.01)
+
+ggsave(filename = "../figures/FractionOfVirusMappedHistogram.pdf", width = 5, height = 5)
+
+
+```
+
+We don't have a good cutoff but based on these data I think we can at least filter out the group below 10% mapping, since it seems unlikely that a virus mapped for only 0-10% would be accurately determined (sequence homology between different viruses and between viruses and bonafide human sequences is more likely to exist the smaller the fraction is...). While this cutoff probably does not remove all false positives, it should remove a large number of them.
+
+
+```{r message=FALSE, warning=FALSE}
+
+all_dat_filt <- all_dat %>% filter(frac_covered >= 0.1)
+
+```
+
+## Viruses detected
+
+With this filter imposed, we see three possible viruses: murine leukemia virus, HIV, and a human endogenous retrovirus sequence (HERV K113).
+
+We are primarily interested in the cNF cell lines and cNF tumors. It looks like all of the samples are positive for K113. This is interesting, because our previous findings in the cNF tumors made it seem like this could be an interesting hit. We now include controls- we'd expect if this was important in cNF to not be in the pNF cell line or control nerve. It would possibly also be expressed in the cNF cell lines. 
+
+```{r message=FALSE, warning=FALSE}
+
+mutate(all_dat_filt, virus = stringr::str_replace_all(virus,"_", " ") %>% 
+         stringr::str_wrap(30)) %>% 
+ggplot(aes(x=virus)) + 
+  geom_bar(aes(fill = label)) + 
+  xlab("Viral Sequence") + ylab("# specimens with virus detected") + 
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+
+ggsave(filename = "../figures/VirusesPerSpecimen.pdf", width = 5, height = 8)
+```
+
+### HERV K113 
+
+Looking closer at K113, if we look at the fraction mapped as well as the reads mapped (cpm), they are substantially higher only in the cNF tumors, and less abundant in the other cell lines. This could indicate that (1) all of the K113 sequence we see is "real" and that there is less of it in the cNF tumor or (2) the K113 sequence in the cell line and control nerve samples is actually something else that aligns to 25% of the K113 sequence, and that the cNF tumor signal is "real" K113. It's also possible that something else entirely is mapping to this sequence and there is much more of it (in terms of length of sequence) in the cNF tumor samples. This is also based on _RNAseq_ data, meaning that this is _expressed_ sequence. It's possible that this sequence is expressed in cNF tumors and less so in other samples due to some microenvironmental or other biological factor. 
+
+```{r message=FALSE, warning=FALSE}
+
+
+ggplot(all_dat_filt %>% filter(grepl("K113", virus)), aes(x=specimenID, y=frac_covered, fill = label)) + 
+  xlab("Viral Sequence") + ylab("Fraction of viral sequence mapped") + 
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1)) + 
+  geom_bar(stat = 'identity')
+
+ggsave(filename = "../figures/K113FractionMappedperSample.pdf", width = 8, height = 5)
+
+ggplot(all_dat_filt %>% filter(grepl("K113", virus)), aes(x=specimenID, y=cpm, fill = label)) + 
+  xlab("Viral Sequence") + ylab("Reads mapped per tumor (cpm)") + 
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1, size =6)) + 
+  geom_bar(stat = 'identity')
+
+ggsave(filename = "../figures/K113CPMperSample.pdf", width = 8, height = 5)
+
+```
+
+If we do a Games-Howell test (t-test with Welch's degree of freedom), we can see that the differences between cNF tumors and all other groups are significant, both for the fraction of K113 sequence covered as well as the CPM of K113 sequences. 
+
+```{r message=FALSE, warning=FALSE}
+
+print('test variance in frac_covered')
+fligner.test(frac_covered ~ label, data = all_dat_filt %>% filter(grepl("K113", virus)))
+
+#  Fligner-Killeen test of homogeneity of variances
+# 
+# data:  frac_covered by label
+# Fligner-Killeen:med chi-squared = 15.787, df = 3, p-value = 0.001254
+
+print('test variance in cpm')
+fligner.test(cpm ~ label, data = all_dat_filt %>% filter(grepl("K113", virus)))
+
+# Fligner-Killeen test of homogeneity of variances
+# 
+# data:  cpm by label
+# Fligner-Killeen:med chi-squared = 24.087, df = 3, p-value = 2.396e-05
+
+#so, var.equal = False
+
+
+ggstatsplot::ggbetweenstats(data = all_dat_filt %>% filter(grepl("K113", virus)),
+            x=label, 
+            y=frac_covered, 
+            fill = label,
+            xlab = "Category",
+            ylab ="Fraction of HERV K113 sequence mapped",
+            plot.type = 'box',
+            type = 'parametric',
+            pairwise.display = "all",
+            results.subtitle = F,
+            var.equal = F,
+            p.adjust.method = "BH",
+            ggtheme = theme_bw()) 
+
+ggsave(filename = "../figures/K113FractionMappedBoxplots.pdf", width = 8, height = 6)
+
+
+
+ggstatsplot::ggbetweenstats(data = all_dat_filt %>% filter(grepl("K113", virus)),
+                            x=label, 
+                            y=cpm, 
+                            fill = label,
+                            xlab = "Category",
+                            ylab ="Count of HERV K113 mapped reads (cpm)",
+                            plot.type = 'box',
+                            type = 'parametric',
+                            pairwise.display = "all",
+                            results.subtitle = F,
+                            var.equal = F,
+                            p.adjust.method = "BH",
+                            ggtheme = theme_bw()) 
+
+ggsave(filename = "../figures/K113CPMBoxplot.pdf", width = 8, height = 6)
+
+```
+
+### HIV
+
+Another interesting finding was the observation that HIV was detected in the cell lines. Looking closer, we determined that this was in the immortalized cell lines only, and not the primary cell lines. 
+
+```{r message=FALSE, warning=FALSE}
+
+#### HIV??? No, probably the lentivirus from Peggy's lab for immortalization
+
+cell_lines <- filter(all_dat_filt, label %in% c("cNF Cell Line", "pNF Cell Line"))
+
+hiv <- cell_lines %>% 
+  filter(virus == 'NC_001802_9181nt_Human_immunodeficiency_virus_1') %>% 
+  select(specimenID, virus, seqlen, mapped, chim_reads, n_bases_covered, frac_covered)
+
+not_detected <- unique(cell_lines$specimenID[!cell_lines$specimenID %in% hiv$specimenID])
+
+no_hiv_detected <- tibble::tibble(
+  "specimenID" = not_detected, 
+  virus = 'NC_001802_9181nt_Human_immunodeficiency_virus_1', 
+  seqlen = 9181,
+  mapped = 0,
+  chim_reads = 0, 
+  n_bases_covered = 0,
+  frac_covered = 0
+  )
+
+```
+
+Never fear! This is probably not HIV! To immortalize these cells, they were infected with a different lentivirus that contained extra copies of CDK4 and hTERT. It's very probable that what we are seeing here is lentiviral sequences that are homologous to HIV. 
+
+It also gives us an interesting perspective: this is very probably a false positive, and we detected 25% of the HIV sequence in these samples. This suggests that ~25-30% could be a reasonable cutoff for false positives (but it's not a systematically derived number, only anecdotal)!
+
+```{r message=FALSE, warning=FALSE}
+
+out <- bind_rows(hiv, no_hiv_detected) %>% 
+  mutate(immortalized = case_when(grepl("i[cp2]",specimenID) ~ TRUE,
+                                  !grepl("i[cp2]",specimenID) ~ FALSE)) %>% 
+  #https://stackoverflow.com/questions/38862303/customize-ggplot2-axis-labels-with-different-colors
+  mutate(x.label = paste("<span style = 'color: ",
+                         ifelse(immortalized==TRUE, "blue", "red"),
+                         ";'>",
+                         specimenID,
+                         "</span>", sep = ""),
+         x.label = forcats::fct_reorder(x.label, as.character(specimenID)))
+
+
+ggplot(out, aes(x=x.label, y=frac_covered)) + 
+  xlab("Cell Line") + 
+  theme_bw() +
+  ylab("Fraction of viral sequence mapped") + 
+  ggtitle("NC_001802_9181nt_Human_immunodeficiency_virus_1") +
+  theme(axis.text.x=ggtext::element_markdown(angle = 45, hjust = 1)) + 
+  geom_bar(stat = 'identity') 
+
+ggsave(filename = "../figures/HIVFractionMappedBarplot.pdf", width = 8, height = 5)
+
+
+```
