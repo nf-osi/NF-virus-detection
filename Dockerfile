@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y gcc g++ python3 make bowtie \
                                        unzip libbz2-dev  liblzma-dev libxml2-dev \
                                        gfortran fort77 libreadline-dev libcurl4-openssl-dev libx11-dev \
                                        libxt-dev x11-common libcairo2-dev libpng-dev libreadline-dev libjpeg-dev \
-                                       pkg-config libtbb-dev cmake rsync libssl-dev tzdata && \
+                                       pkg-config libtbb-dev cmake rsync libssl-dev tzdata bowtie2 && \
     apt-get clean
 
 
