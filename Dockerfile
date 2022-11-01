@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y gcc g++ python3 make bowtie \
 # make python3 be the default python
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+RUN curl https://bootstrap.pypa.io/pip/3.6/get-pip.py -o get-pip.py && \
   python get-pip.py
 
 ENV SRC /usr/local/src
