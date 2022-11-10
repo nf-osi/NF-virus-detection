@@ -26,7 +26,9 @@ RUN curl https://bootstrap.pypa.io/pip/3.6/get-pip.py -o get-pip.py && \
 ENV SRC /usr/local/src
 ENV BIN  /usr/local/bin
 
-RUN pip install synapseclient numpy cython metaphlan
+RUN pip install synapseclient numpy cython metaphlan==3.0.13
+
+RUN metaphlan --install --index mpa_v30_CHOCOPhlAn_201901
 
 ## STAR Aligner
 WORKDIR $SRC
@@ -36,4 +38,3 @@ RUN STAR_URL="https://github.com/alexdobin/STAR/archive/${STAR_VERSION}.tar.gz" 
     wget -P $SRC $STAR_URL &&\
         tar -xvf $SRC/${STAR_VERSION}.tar.gz -C $SRC && \
             mv $SRC/STAR-${STAR_VERSION}/bin/Linux_x86_64_static/STAR /usr/local/bin
-            
