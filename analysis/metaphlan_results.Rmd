@@ -1,0 +1,140 @@
+---
+title: "Viruses detected in cNF and related samples with CTAT-VIF"
+author: Robert Allaway, Parnal Joshi
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  html_document:
+    toc: true
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    fig_width: 7
+    fig_height: 6
+    fig_caption: true
+    df_print: paged 
+    #code_folding: true 
+---
+
+# Intro
+
+To compare the integrated "virome" of cNF tumors to similar samples, we performed virus detection on RNA-seq data from 33 cNF tumors from 11 patients, 14 cNF cell lines (7 immortalized and primary cell pairs), 3 immortalized plexiform neurofibroma cell lines, and 4 publicly-available control nerve samples. 
+
+After running metaphlan3 on these data (the metaphlan4 databases do not currently support viruses), we stored the output files on Synapse. 
+
+# Load packages and prepare data
+
+This loads packages necessary for the analysis and also the data. 
+
+```{r message=FALSE, warning=FALSE}
+library(synapser)
+synLogin()
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggstatsplot)
+library(PMCMRplus)
+library(rstantools)
+
+library(pheatmap)
+
+## all metaphlan output files
+dataset <- synTableQuery("SELECT * FROM syn44177250.3")$asDataFrame() %>% 
+  mutate(label = case_when(grepl("L002", name) & 
+                             tumorType == "Cutaneous Neurofibroma" ~ "cNF Cell Line",
+                           grepl("L002", name) & 
+                             tumorType == "Plexiform Neurofibroma" ~ "pNF Cell Line",
+                           is.na(tumorType) ~ "Control Nerve",
+                           !grepl("L002", name) & 
+                             tumorType == "Cutaneous Neurofibroma" ~ "cNF Tumor"))
+
+
+all_dat_ls <- apply(dataset, 1, function(x){
+  read_tsv(synGet(x['id'])$path, col_types = cols(), comment = "#", col_names = c("clade_name", "NCBI_tax_id",	"relative_abundance", 'other_species')) %>% 
+    mutate(specimenID = x['specimenID'])
+}) 
+
+all_dat <- all_dat_ls %>% 
+  bind_rows() %>% 
+  left_join(dataset)
+
+
+#some samples do not have any k113 detected: 
+all_dat_filt <- filter(all_dat, grepl("Human_endogenous_retrovirus_K", clade_name)) 
+unique(all_dat$specimenID[!all_dat$specimenID %in% all_dat_filt$specimenID])
+
+##add undetected sample back in manually for plotting and testing purposes
+dummy_row <- all_dat[all_dat$specimenID=='SRR4422381',][1,]
+dummy_row$relative_abundance <- 0
+dummy_row$clade_name <- 'k__Viruses|p__Viruses_unclassified|c__Viruses_unclassified|o__Ortervirales|f__Retroviridae|g__Retroviridae_unclassified|s__Human_endogenous_retrovirus_K'
+
+all_dat_filt <- all_dat_filt %>% 
+  add_row(dummy_row)
+```
+
+# Results
+
+
+```{r message=FALSE, warning=FALSE}
+
+all_dat %>% 
+  select(specimenID, clade_name, relative_abundance) 
+
+all_dat %>% 
+  select(specimenID, clade_name, relative_abundance) %>% 
+  write_csv(.,"../figures/allclades-metaphlan.csv")
+
+
+```
+
+### HERV K113 
+
+HERV K113-mapping reads appears to be present in greater abundance among unmapped (to human genome) reads in the cNF tumors vs the other samples. 
+
+```{r message=FALSE, warning=FALSE}
+
+
+ggplot(all_dat_filt, aes(x=specimenID, y=relative_abundance, fill = label)) + 
+  xlab("Viral Sequence") + ylab("Relative Abundance") + 
+  theme_bw() +
+  theme(axis.text.x=element_text(angle = 45, hjust = 1)) + 
+  geom_bar(stat = 'identity')
+
+ggsave(filename = "../figures/K113RelativeAbundanceHistogram-metaphlan.pdf", width = 8, height = 5)
+
+
+```
+
+If we do a Games-Howell test (t-test with Welch's degree of freedom), we can see that the differences between cNF tumors and all other groups are significant, both for the fraction of K113 sequence covered as well as the CPM of K113 sequences. 
+
+```{r message=FALSE, warning=FALSE}
+
+print('test variance in frac_covered')
+fligner.test(relative_abundance ~ label, data = all_dat_filt)
+
+# 	Fligner-Killeen test of homogeneity of variances
+# 
+# data:  relative_abundance by label
+# Fligner-Killeen:med chi-squared = 7.4248, df = 3, p-value = 0.05952
+#so, var.equal = True
+
+
+ggstatsplot::ggbetweenstats(data = all_dat_filt,
+            x=label, 
+            y=relative_abundance, 
+            fill = label,
+            xlab = "Category",
+            ylab ="Relative Abundance of Sequence",
+            plot.type = 'box',
+            type = 'parametric',
+            pairwise.display = "all",
+            results.subtitle = F,
+            var.equal = T,
+            p.adjust.method = "BH",
+            ggtheme = theme_bw()) 
+
+ggsave(filename = "../figures/K113RelativeAbundanceBoxplot-metaphlan.pdf", width = 8, height = 6)
+
+
+```
