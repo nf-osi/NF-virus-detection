@@ -98,11 +98,11 @@ HERV K113-mapping reads appears to be present in greater abundance among unmappe
 ggplot(all_dat_filt, aes(x=specimenID, y=relative_abundance, fill = label)) + 
   xlab("Viral Sequence") + ylab("Relative Abundance") + 
   theme_bw() +
-  theme(axis.text.x=element_text(angle = 45, hjust = 1)) + 
+  theme(axis.text.x=element_text(angle = 45, hjust = 1, size =6)) + 
   geom_bar(stat = 'identity')
 
 ggsave(filename = "../figures/K113RelativeAbundanceHistogram-metaphlan.pdf", width = 8, height = 5)
-
+ggsave(filename = "../figures/K113RelativeAbundanceHistogram-metaphlan.png", width = 8, height = 5)
 
 ```
 
@@ -135,6 +135,60 @@ ggstatsplot::ggbetweenstats(data = all_dat_filt,
             ggtheme = theme_bw()) 
 
 ggsave(filename = "../figures/K113RelativeAbundanceBoxplot-metaphlan.pdf", width = 8, height = 6)
+ggsave(filename = "../figures/K113RelativeAbundanceBoxplot-metaphlan.png", width = 8, height = 6)
 
 
 ```
+
+
+### Other Viruses 
+
+```{r message=FALSE, warning=FALSE}
+annots <- all_dat %>%  
+  filter(grepl(clade_name,pattern = "s__")) %>% 
+  select(specimenID, label) %>% 
+  mutate(immortalized = case_when(grepl("i[cp2]",specimenID) ~ "TRUE",
+                                  !grepl("i[cp2]",specimenID) ~ "FALSE")) %>% 
+  distinct() %>% 
+  tibble::column_to_rownames("specimenID")  %>% 
+  rename('Immortalization status' = immortalized, Category = label)
+
+##viruses
+n_spec_virus <- all_dat %>%  
+  filter(grepl(NCBI_tax_id, pattern = "10239")) %>% 
+  filter(grepl(clade_name,pattern = "s__")) %>% 
+  mutate(clade_name = stringr::str_extract("s__.+", string = clade_name)) %>% 
+  summarize(length(unique(clade_name)))
+
+n_spec_bact <- all_dat %>%  
+  filter(!grepl(NCBI_tax_id, pattern = '10239') & grepl(NCBI_tax_id, pattern = '2')) %>% 
+  filter(grepl(clade_name,pattern = "s__")) %>% 
+  mutate(clade_name = stringr::str_extract("s__.+", string = clade_name)) %>% 
+  summarize(length(unique(clade_name)))
+
+glue::glue("{n_spec_virus} unique viral species detected")
+glue::glue("{n_spec_bact} unique bacterial species detected")
+
+species_only <- all_dat %>%  
+  filter(grepl(clade_name,pattern = "s__")) %>% 
+  mutate(clade_name = stringr::str_extract("s__.+", string = clade_name)) %>% 
+  select(clade_name, relative_abundance, specimenID) %>% 
+  tidyr::pivot_wider(names_from = specimenID, values_from = relative_abundance) %>% 
+  tibble::column_to_rownames("clade_name") %>% 
+  filter_all(any_vars(. > 5)) %>% 
+  select(starts_with("cNF"), starts_with("icNF"), starts_with('hTERT NF1 ipN'), starts_with("SRR"),starts_with("patient"))
+
+
+pheatmap(species_only, cluster_rows = F, cluster_cols = F, border_color = NA, annotation_col = annots, fontsize = 5)
+
+pheatmap(species_only, cluster_rows = F, cluster_cols = F, border_color = NA, filename = '../figures/all-species-heatmap-metaphlan.png',
+         width = 11, height =5, annotation_col = annots, )
+
+```
+
+
+
+```{r}
+sessionInfo()
+```
+

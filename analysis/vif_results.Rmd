@@ -93,7 +93,8 @@ ggplot(all_dat, aes(x=mapped, y=frac_covered)) +
   theme_bw() +
   geom_point(aes(color = label))
 
-ggsave(filename = "../figures/FractionOfVirusMapped_vs_ReadsMapped.pdf", width = 5, height = 5)
+ggsave(filename = "../figures/FractionOfVirusMapped_vs_ReadsMapped.pdf", width = 7, height = 5)
+ggsave(filename = "../figures/FractionOfVirusMapped_vs_ReadsMapped.png", width = 7, height = 5)
 
 ```
 
@@ -110,6 +111,7 @@ ggplot(read_counts, aes(x=label, y=Reads, color = label)) +
   theme_bw()
 
 ggsave(filename = "../figures/ReadsMappedPerSpecimen.pdf", width = 7, height = 5)
+ggsave(filename = "../figures/ReadsMappedPerSpecimen.png", width = 7, height = 5)
 
 ```
 
@@ -122,8 +124,8 @@ ggplot(all_dat, aes(x=cpm, y=frac_covered, color = label)) +
   theme_bw() +
   geom_point()
 
-ggsave(filename = "../figures/FractionOfVirusMapped_vs_CPM.pdf", width = 5, height = 5)
-
+ggsave(filename = "../figures/FractionOfVirusMapped_vs_CPM.pdf", width = 7, height = 5)
+ggsave(filename = "../figures/FractionOfVirusMapped_vs_CPM.png", width = 7, height = 5)
 
 ```
 
@@ -139,6 +141,7 @@ ggplot(all_dat, aes(x=frac_covered)) +
   geom_histogram(binwidth = 0.01)
 
 ggsave(filename = "../figures/FractionOfVirusMappedHistogram.pdf", width = 5, height = 5)
+ggsave(filename = "../figures/FractionOfVirusMappedHistogram.png", width = 5, height = 5)
 
 
 ```
@@ -166,9 +169,11 @@ ggplot(aes(x=virus)) +
   geom_bar(aes(fill = label)) + 
   xlab("Viral Sequence") + ylab("# specimens with virus detected") + 
   theme_bw() +
-  theme(axis.text.x=element_text(angle = 45, hjust = 1))
+  theme(axis.text.x=element_text(angle = 45, hjust = 1), plot.margin = margin(l = 30, r = 10, t = 10, b = 10))
 
-ggsave(filename = "../figures/VirusesPerSpecimen.pdf", width = 5, height = 8)
+ggsave(filename = "../figures/VirusesPerSpecimen.pdf", width = 5, height = 5)
+ggsave(filename = "../figures/VirusesPerSpecimen.png", width = 5, height = 5)
+
 ```
 
 ### HERV K113 
@@ -185,6 +190,7 @@ ggplot(all_dat_filt %>% filter(grepl("K113", virus)), aes(x=specimenID, y=frac_c
   geom_bar(stat = 'identity')
 
 ggsave(filename = "../figures/K113FractionMappedperSample.pdf", width = 8, height = 5)
+ggsave(filename = "../figures/K113FractionMappedperSample.png", width = 8, height = 5)
 
 ggplot(all_dat_filt %>% filter(grepl("K113", virus)), aes(x=specimenID, y=cpm, fill = label)) + 
   xlab("Viral Sequence") + ylab("Reads mapped per tumor (cpm)") + 
@@ -193,6 +199,7 @@ ggplot(all_dat_filt %>% filter(grepl("K113", virus)), aes(x=specimenID, y=cpm, f
   geom_bar(stat = 'identity')
 
 ggsave(filename = "../figures/K113CPMperSample.pdf", width = 8, height = 5)
+ggsave(filename = "../figures/K113CPMperSample.png", width = 8, height = 5)
 
 ```
 
@@ -234,7 +241,7 @@ ggstatsplot::ggbetweenstats(data = all_dat_filt %>% filter(grepl("K113", virus))
             ggtheme = theme_bw()) 
 
 ggsave(filename = "../figures/K113FractionMappedBoxplots.pdf", width = 8, height = 6)
-
+ggsave(filename = "../figures/K113FractionMappedBoxplots.png", width = 8, height = 6)
 
 
 ggstatsplot::ggbetweenstats(data = all_dat_filt %>% filter(grepl("K113", virus)),
@@ -252,6 +259,7 @@ ggstatsplot::ggbetweenstats(data = all_dat_filt %>% filter(grepl("K113", virus))
                             ggtheme = theme_bw()) 
 
 ggsave(filename = "../figures/K113CPMBoxplot.pdf", width = 8, height = 6)
+ggsave(filename = "../figures/K113CPMBoxplot.png", width = 8, height = 6)
 
 ```
 
@@ -310,6 +318,13 @@ ggplot(out, aes(x=x.label, y=frac_covered)) +
   geom_bar(stat = 'identity') 
 
 ggsave(filename = "../figures/HIVFractionMappedBarplot.pdf", width = 8, height = 5)
-
+ggsave(filename = "../figures/HIVFractionMappedBarplot.png", width = 8, height = 5)
 
 ```
+
+
+
+```{r}
+sessionInfo()
+```
+
